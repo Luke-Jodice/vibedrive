@@ -17,6 +17,7 @@ export default function Home() {
   const [origin, setOrigin] = useState("New York, NY");
   const [destination, setDestination] = useState("Atlanta, GA");
   const [tripSongs, setTripSongs] = useState<Track[]>([]);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
 
   return (
     <main className="dashboard">
@@ -27,6 +28,8 @@ export default function Home() {
         setDestination={setDestination}
         tripSongs={tripSongs}
         setTripSongs={setTripSongs}
+        selectedPlaylistId={selectedPlaylistId}
+        setSelectedPlaylistId={setSelectedPlaylistId}
       />
       <section className="map-container">
         <Map 

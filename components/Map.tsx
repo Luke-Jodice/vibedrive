@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { GoogleMap, useJsApiLoader, DirectionsService, DirectionsRenderer, Marker, Polyline, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, DirectionsService, Marker, Polyline } from '@react-google-maps/api';
 import { Track } from '@/app/page';
+import VibeTooltip from './VibeTooltip';
 
 const containerStyle = {
   width: '100%',
@@ -14,6 +15,11 @@ const center = {
   lng: -77.0369
 };
 
+const VIBE_COLORS = [
+  '#1DB954', // Spotify Green
+  '#00D1FF', // Blue
+];
+
 const darkMapStyle = [
   { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
   { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
@@ -21,19 +27,21 @@ const darkMapStyle = [
   { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
   { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
   { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
-  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#6b9a76" }] },
   { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
   { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
   { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
-  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#746855" }] },
-  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#1f2835" }] },
-  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#f3d19c" }] },
-  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2f3948" }] },
-  { featureType: "transit.station", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#515c6d" }] },
-  { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#17263c" }] },
 ];
+
+const pinIcon = (color: string) => ({
+  path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z",
+  fillColor: color,
+  fillOpacity: 1,
+  strokeWeight: 1.5,
+  strokeColor: "#FFFFFF",
+  scale: 1.5,
+  anchor: { x: 12, y: 22 }
+} as google.maps.Symbol);
 
 interface MapProps {
   origin: string;
@@ -44,8 +52,12 @@ interface MapProps {
 export default function Map({ 
   origin, destination, tripSongs
 }: MapProps) {
+  const [map, setMap] = useState<google.maps.Map | null>(null);
   const [response, setResponse] = useState<google.maps.DirectionsResult | null>(null);
-  const [hoveredSong, setHoveredSong] = useState<{ id: string, name: string, pos: google.maps.LatLng } | null>(null);
+  const [fullPath, setFullPath] = useState<google.maps.LatLng[]>([]);
+  const [hoveredSong, setHoveredSong] = useState<{ track: Track, pos: { x: number, y: number } } | null>(null);
+
+  const routeKey = useMemo(() => `${origin}-${destination}`, [origin, destination]);
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -53,95 +65,94 @@ export default function Map({
     libraries: ['geometry']
   });
 
+  const onMapLoad = useCallback((mapInstance: google.maps.Map) => {
+    setMap(mapInstance);
+  }, []);
+
   useEffect(() => {
     setResponse(null);
-  }, [origin, destination]);
+    setFullPath([]);
+    setHoveredSong(null);
+  }, [routeKey]);
 
   const directionsCallback = useCallback((res: google.maps.DirectionsResult | null) => {
     if (res !== null && res.status === 'OK') {
       setResponse(res);
-    }
-  }, []);
+      const path = res.routes[0].overview_path;
+      setFullPath(path);
 
-  // Algorithm to calculate sequential path segments for songs
+      // Fit map to show entire route
+      if (map && path.length > 0) {
+        const bounds = new google.maps.LatLngBounds();
+        path.forEach(pt => bounds.extend(pt));
+        map.fitBounds(bounds, {
+          top: 50,
+          right: 50,
+          bottom: 50,
+          left: 50
+        });
+      }
+    }
+  }, [map]);
+
   const songPaths = useMemo(() => {
-    if (!response || !tripSongs.length || !isLoaded) return [];
+    if (!response || !tripSongs.length || !isLoaded || !fullPath.length) return [];
     
     const route = response.routes[0];
-    const fullPath = route.overview_path;
     const totalDurationSec = route.legs.reduce((acc, leg) => acc + (leg.duration?.value || 0), 0);
     const totalDistanceMeters = google.maps.geometry.spherical.computeLength(fullPath);
     const averageSpeedMps = totalDistanceMeters / totalDurationSec;
 
-    let currentDistanceOnRoute = 0;
     let pathIndex = 0;
+    let currentStartPoint = fullPath[0];
 
     return tripSongs.map((track, idx) => {
       const songDurationSec = track.durationMs / 1000;
       const songDistanceMeters = songDurationSec * averageSpeedMps;
       
-      const segmentPath: google.maps.LatLng[] = [];
-      
-      // Starting point is currentDistanceOnRoute
-      // We need to build the path until we cover songDistanceMeters
+      const segmentPath: google.maps.LatLng[] = [currentStartPoint];
       let segmentDistance = 0;
-      
-      // Add first point (interpolated if necessary)
-      // For the very first song, it's index 0. For others, it's the last point of previous.
-      if (pathIndex >= fullPath.length - 1) return null;
-
-      segmentPath.push(fullPath[pathIndex]);
 
       while (segmentDistance < songDistanceMeters && pathIndex < fullPath.length - 1) {
-        const p1 = fullPath[pathIndex];
+        const p1 = segmentPath[segmentPath.length - 1];
         const p2 = fullPath[pathIndex + 1];
         const stepDist = google.maps.geometry.spherical.computeDistanceBetween(p1, p2);
         
         if (segmentDistance + stepDist > songDistanceMeters) {
-          const fraction = (songDistanceMeters - segmentDistance) / stepDist;
+          const neededDist = songDistanceMeters - segmentDistance;
+          const fraction = neededDist / stepDist;
           const interpolated = google.maps.geometry.spherical.interpolate(p1, p2, fraction);
           segmentPath.push(interpolated);
           
-          // We don't increment pathIndex here because the NEXT song 
-          // might still start on this same segment (p1-p2)
-          // But for simplicity in this tick, we'll just store the interpolated state
-          // Actually, let's keep it simple: next song starts at this interpolated point.
-          // This requires a more complex state, let's approximate by moving to p2 if fraction is large
-          segmentDistance = songDistanceMeters; 
-          // Note: In a production version, we'd slice the array and handle sub-segment starts.
+          segmentDistance = songDistanceMeters;
+          currentStartPoint = interpolated;
         } else {
           segmentPath.push(p2);
           segmentDistance += stepDist;
           pathIndex++;
+          currentStartPoint = p2;
         }
       }
 
+      if (segmentPath.length < 2) return null;
+
       return {
-        id: `${track.id}-${idx}`,
+        id: `${track.id}-${idx}-${routeKey}`,
         path: segmentPath,
-        name: track.name,
-        // Midpoint for the marker
-        midpoint: segmentPath[Math.floor(segmentPath.length / 2)]
+        track: track,
+        color: VIBE_COLORS[idx % VIBE_COLORS.length]
       };
     }).filter(Boolean) as any[];
-  }, [response, tripSongs, isLoaded]);
+  }, [response, tripSongs, isLoaded, fullPath, routeKey]);
 
-  const directionsServiceOptions = useMemo<google.maps.DirectionsRequest>(() => {
+  const directionsServiceOptions = useMemo<google.maps.DirectionsRequest | null>(() => {
+    if (!origin || !destination) return null;
     return {
       destination: destination,
       origin: origin,
       travelMode: "DRIVING" as google.maps.TravelMode
     };
   }, [origin, destination]); 
-
-  const rendererOptions = useMemo<google.maps.DirectionsRendererOptions>(() => ({
-    polylineOptions: {
-      strokeColor: '#333',
-      strokeOpacity: 0.5,
-      strokeWeight: 4,
-    },
-    suppressMarkers: false
-  }), []);
 
   const mapOptions = useMemo(() => ({
     styles: darkMapStyle,
@@ -154,29 +165,29 @@ export default function Map({
 
   return (
     <div style={{ height: '100%', width: '100%' }}>
-      {!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY && (
-        <div style={{ position: 'absolute', zIndex: 1, background: 'rgba(0,0,0,0.7)', color: 'white', padding: '1rem', margin: '1rem', borderRadius: '8px' }}>
-          Please add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to .env.local
-        </div>
-      )}
       <GoogleMap
+        key={routeKey}
         mapContainerStyle={containerStyle}
         center={center}
         zoom={6}
         options={mapOptions}
+        onLoad={onMapLoad}
       >
-        {!response && (
+        {!response && directionsServiceOptions && (
           <DirectionsService
             options={directionsServiceOptions}
             callback={directionsCallback}
           />
         )}
 
-        {response && (
-          <DirectionsRenderer
+        {fullPath.length > 0 && (
+          <Polyline
+            key={`base-route-${routeKey}`}
+            path={fullPath}
             options={{
-              directions: response,
-              ...rendererOptions
+              strokeColor: '#333',
+              strokeOpacity: 0.3,
+              strokeWeight: 4,
             }}
           />
         )}
@@ -185,39 +196,51 @@ export default function Map({
           <React.Fragment key={sp.id}>
             <Polyline
               path={sp.path}
-              onMouseOver={(e) => {
-                if (e.latLng) {
-                  setHoveredSong({ id: sp.id, name: sp.name, pos: e.latLng });
+              options={{
+                strokeColor: sp.color,
+                strokeOpacity: 0.15,
+                strokeWeight: 14,
+                zIndex: 9
+              }}
+            />
+            <Polyline
+              path={sp.path}
+              onMouseMove={(e) => {
+                if (e.domEvent) {
+                  setHoveredSong({ 
+                    track: sp.track, 
+                    pos: { x: (e.domEvent as MouseEvent).clientX, y: (e.domEvent as MouseEvent).clientY } 
+                  });
                 }
               }}
               onMouseOut={() => setHoveredSong(null)}
               options={{
-                strokeColor: hoveredSong?.id === sp.id ? '#1ed760' : '#1DB954',
+                strokeColor: sp.color,
                 strokeOpacity: 1.0,
-                strokeWeight: hoveredSong?.id === sp.id ? 10 : 8,
+                strokeWeight: 7,
                 zIndex: 10
               }}
-            />
-            <Marker 
-              position={sp.midpoint}
-              icon={{
-                url: "https://maps.google.com/mapfiles/ms/icons/green-dot.png",
-                scaledSize: new google.maps.Size(20, 20)
-              }}
-              title={sp.name}
             />
           </React.Fragment>
         ))}
 
-        {hoveredSong && (
-          <InfoWindow
-            position={hoveredSong.pos}
-            options={{ pixelOffset: new google.maps.Size(0, -10) }}
-          >
-            <div style={{ color: 'black', fontWeight: 'bold', padding: '2px' }}>
-              🎵 {hoveredSong.name}
-            </div>
-          </InfoWindow>
+        {hoveredSong && <VibeTooltip track={hoveredSong.track} pos={hoveredSong.pos} />}
+
+        {fullPath.length > 0 && (
+          <>
+            <Marker 
+              key={`marker-a-${routeKey}`} 
+              position={fullPath[0]} 
+              icon={pinIcon("#FFFFFF")}
+              title="Start"
+            />
+            <Marker 
+              key={`marker-b-${routeKey}`} 
+              position={fullPath[fullPath.length - 1]} 
+              icon={pinIcon("#1DB954")}
+              title="End"
+            />
+          </>
         )}
       </GoogleMap>
     </div>

@@ -5,6 +5,14 @@ import React, { useState, useEffect } from "react";
 import { searchTracks } from "@/lib/spotify";
 import { Track } from "@/app/page";
 
+type PlaylistSummary = {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  trackCount: number | null;
+  ownerName: string | null;
+};
+
 interface SidebarProps {
   origin: string;
   setOrigin: (val: string) => void;
@@ -12,22 +20,54 @@ interface SidebarProps {
   setDestination: (val: string) => void;
   tripSongs: Track[];
   setTripSongs: React.Dispatch<React.SetStateAction<Track[]>>;
+  selectedPlaylistId: string | null;
+  setSelectedPlaylistId: (id: string | null) => void;
 }
 
 export default function Sidebar({ 
   origin, setOrigin, destination, setDestination, 
-  tripSongs, setTripSongs
+  tripSongs, setTripSongs,
+  selectedPlaylistId,
+  setSelectedPlaylistId,
 }: SidebarProps) {
   const { data: session } = useSession();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
+  const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
+  const [playlistError, setPlaylistError] = useState<string | null>(null);
+  const [isLoadingPlaylistTracks, setIsLoadingPlaylistTracks] = useState(false);
+  const [playlistTracksError, setPlaylistTracksError] = useState<string | null>(null);
+
+  // Local state for debounced inputs
+  const [localOrigin, setLocalOrigin] = useState(origin);
+  const [localDestination, setLocalDestination] = useState(destination);
+
+  // Sync local state if props change externally
+  useEffect(() => { setLocalOrigin(origin); }, [origin]);
+  useEffect(() => { setLocalDestination(destination); }, [destination]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localOrigin !== origin) setOrigin(localOrigin);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [localOrigin, origin, setOrigin]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localDestination !== destination) setDestination(localDestination);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [localDestination, destination, setDestination]);
 
   useEffect(() => {
     const fetchResults = async () => {
-      if (searchQuery.length > 2 && session?.accessToken) {
+      const accessToken = (session as any)?.accessToken as string | undefined;
+      if (searchQuery.length > 2 && accessToken) {
         setIsSearching(true);
-        const results = await searchTracks(searchQuery, session.accessToken as string);
+        const results = await searchTracks(searchQuery, accessToken);
         setSearchResults(results);
         setIsSearching(false);
       } else {
@@ -39,6 +79,92 @@ export default function Sidebar({
     return () => clearTimeout(timer);
   }, [searchQuery, session]);
 
+  useEffect(() => {
+    const stored = typeof window !== "undefined" ? window.localStorage.getItem("vibedrive:selectedPlaylistId") : null;
+    if (stored && !selectedPlaylistId) {
+      setSelectedPlaylistId(stored);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (selectedPlaylistId) window.localStorage.setItem("vibedrive:selectedPlaylistId", selectedPlaylistId);
+    else window.localStorage.removeItem("vibedrive:selectedPlaylistId");
+  }, [selectedPlaylistId]);
+
+  useEffect(() => {
+    const fetchPlaylists = async () => {
+      if (!session) {
+        setPlaylists([]);
+        setPlaylistError(null);
+        setIsLoadingPlaylists(false);
+        return;
+      }
+
+      setIsLoadingPlaylists(true);
+      setPlaylistError(null);
+      try {
+        const res = await fetch("/api/spotify/playlists", { cache: "no-store" });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error || `Failed to load playlists (${res.status})`);
+        }
+        const data = await res.json();
+        setPlaylists(data.items || []);
+      } catch (e: any) {
+        setPlaylistError(e?.message || "Failed to load playlists");
+        setPlaylists([]);
+      } finally {
+        setIsLoadingPlaylists(false);
+      }
+    };
+
+    fetchPlaylists();
+  }, [session]);
+
+  useEffect(() => {
+    if (!session || !selectedPlaylistId) return;
+
+    let cancelled = false;
+    const playlistId = selectedPlaylistId;
+    const controller = new AbortController();
+
+    const run = async () => {
+      setIsLoadingPlaylistTracks(true);
+      setPlaylistTracksError(null);
+
+      try {
+        const res = await fetch(`/api/spotify/playlists/${encodeURIComponent(playlistId)}/tracks`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error || `Failed to load playlist tracks (${res.status})`);
+        }
+        const data = await res.json();
+        if (!cancelled) {
+          setTripSongs(Array.isArray(data.items) ? data.items : []);
+        }
+      } catch (e: any) {
+        if (!cancelled && e?.name !== "AbortError") {
+          setPlaylistTracksError(e?.message || "Failed to load playlist tracks");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingPlaylistTracks(false);
+        }
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [session, selectedPlaylistId, setTripSongs]);
+
   const addTrackToTrip = (track: Track) => {
     setTripSongs([...tripSongs, track]);
     setSearchQuery("");
@@ -47,6 +173,11 @@ export default function Sidebar({
 
   const removeTrackFromTrip = (index: number) => {
     setTripSongs(tripSongs.filter((_, i) => i !== index));
+  };
+
+  const clearTracksFromTrip = () => {
+    setTripSongs([]);
+    setSelectedPlaylistId(null);
   };
 
   return (
@@ -60,13 +191,58 @@ export default function Sidebar({
         )}
       </div>
 
+      {session && (
+        <div className="playlist-selection">
+          <h3>Playlist</h3>
+          {isLoadingPlaylists ? (
+            <div className="help-text">Loading your playlists…</div>
+          ) : playlistError ? (
+            <div className="error-text">{playlistError}</div>
+          ) : (
+            <div className="playlist-row">
+              <select
+                className="playlist-select"
+                value={selectedPlaylistId ?? ""}
+                onChange={(e) => setSelectedPlaylistId(e.target.value || null)}
+                disabled={isLoadingPlaylistTracks}
+              >
+                <option value="">Select a playlist…</option>
+                {playlists.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}{p.trackCount != null ? ` (${p.trackCount})` : ""}
+                  </option>
+                ))}
+              </select>
+              <button className="clear-btn" onClick={() => setSelectedPlaylistId(null)} disabled={!selectedPlaylistId}>
+                Clear
+              </button>
+            </div>
+          )}
+          {isLoadingPlaylistTracks && (
+            <div className="help-text" style={{ marginTop: "0.5rem" }}>
+              Loading tracks into your route…
+            </div>
+          )}
+          {playlistTracksError && (
+            <div className="error-text" style={{ marginTop: "0.5rem" }}>
+              {playlistTracksError}
+            </div>
+          )}
+          {!!selectedPlaylistId && !isLoadingPlaylistTracks && !playlistTracksError && (
+            <div className="help-text" style={{ marginTop: "0.5rem" }}>
+              Playlist added to your route.
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="route-selection">
         <div className="input-group">
           <label>Origin</label>
           <input 
             type="text" 
-            value={origin} 
-            onChange={(e) => setOrigin(e.target.value)} 
+            value={localOrigin} 
+            onChange={(e) => setLocalOrigin(e.target.value)} 
             placeholder="e.g. New York, NY"
           />
         </div>
@@ -74,8 +250,8 @@ export default function Sidebar({
           <label>Destination</label>
           <input 
             type="text" 
-            value={destination} 
-            onChange={(e) => setDestination(e.target.value)} 
+            value={localDestination} 
+            onChange={(e) => setLocalDestination(e.target.value)} 
             placeholder="e.g. Atlanta, GA"
           />
         </div>
@@ -109,6 +285,7 @@ export default function Sidebar({
 
       <div className="song-list">
         <h3>Trip Soundtrack</h3>
+        <div onClick={clearTracksFromTrip} className="clear-btn">Clear selected choices</div>
         {tripSongs.length === 0 && (
           <div className="empty-state">No songs added yet. Start searching!</div>
         )}
@@ -152,6 +329,47 @@ export default function Sidebar({
           font-size: 0.8rem;
         }
         .spotify { background: #1DB954; color: black; }
+        .playlist-selection {
+          margin-bottom: 1.5rem;
+          background: #1e1e1e;
+          padding: 1rem;
+          border-radius: 8px;
+        }
+        .playlist-row {
+          display: flex;
+          gap: 0.5rem;
+          align-items: center;
+        }
+        .playlist-select {
+          width: 100%;
+          background: #282828;
+          border: 1px solid #333;
+          color: white;
+          padding: 0.7rem;
+          border-radius: 6px;
+          font-size: 0.9rem;
+        }
+        .help-text {
+          color: #b3b3b3;
+          font-size: 0.85rem;
+        }
+        .error-text {
+          color: #ff4d4d;
+          font-size: 0.85rem;
+        }
+        .clear-btn {
+          background: #282828;
+          border: 1px solid #333;
+          color: #b3b3b3;
+          padding: 0.7rem 0.9rem;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: 600;
+        }
+        .clear-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
         .route-selection {
           margin-bottom: 1.5rem;
           background: #1e1e1e;
