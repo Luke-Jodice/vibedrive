@@ -13,7 +13,7 @@ export default function VibeTooltip({ track, pos }: VibeTooltipProps) {
     <div className="vibe-tooltip" style={{ left: pos.x, top: pos.y }}>
       <img src={track.albumArt} alt={track.name} className="tooltip-art" />
       <div className="tooltip-content">
-        <span className="tooltip-label">Now Playing</span>
+        <span className="tooltip-label"></span>
         <strong className="track-name">{track.name}</strong>
         <span className="artist-name">{track.artist}</span>
       </div>

@@ -183,7 +183,7 @@ export default function Sidebar({
   return (
     <div className="sidebar">
       <div className="sidebar-header">
-        <h1>Vibedrive</h1>
+        <h1>SoundRoute</h1>
         {session ? (
           <button onClick={() => signOut()} className="auth-button">Sign Out</button>
         ) : (
