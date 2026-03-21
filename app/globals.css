@@ -33,12 +33,21 @@ button {
 .dashboard {
   display: flex;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
   overflow: hidden;
   background: var(--bg-darker);
 }
 
+@media (max-width: 768px) {
+  .dashboard {
+    flex-direction: column;
+  }
+}
+
 .map-container {
   flex: 1;
   position: relative;
+  width: 100%;
+  height: 100%;
 }

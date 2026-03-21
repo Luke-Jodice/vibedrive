@@ -180,8 +180,14 @@ export default function Sidebar({
     setSelectedPlaylistId(null);
   };
 
+  const [isCollapsed, setIsCollapsed] = useState(true);
+
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+      <div className="mobile-handle" onClick={() => setIsCollapsed(!isCollapsed)}>
+        <div className="handle-bar"></div>
+      </div>
+      
       <div className="sidebar-header">
         <h1>SoundRoute</h1>
         {session ? (
@@ -191,127 +197,153 @@ export default function Sidebar({
         )}
       </div>
 
-      {session && (
-        <div className="playlist-selection">
-          <h3>Playlist</h3>
-          {isLoadingPlaylists ? (
-            <div className="help-text">Loading your playlists…</div>
-          ) : playlistError ? (
-            <div className="error-text">{playlistError}</div>
-          ) : (
-            <div className="playlist-row">
-              <select
-                className="playlist-select"
-                value={selectedPlaylistId ?? ""}
-                onChange={(e) => setSelectedPlaylistId(e.target.value || null)}
-                disabled={isLoadingPlaylistTracks}
-              >
-                <option value="">Select a playlist…</option>
-                {playlists.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}{p.trackCount != null ? ` (${p.trackCount})` : ""}
-                  </option>
-                ))}
-              </select>
-              <button className="clear-btn" onClick={() => setSelectedPlaylistId(null)} disabled={!selectedPlaylistId}>
-                Clear
-              </button>
-            </div>
-          )}
-          {isLoadingPlaylistTracks && (
-            <div className="help-text" style={{ marginTop: "0.5rem" }}>
-              Loading tracks into your route…
-            </div>
-          )}
-          {playlistTracksError && (
-            <div className="error-text" style={{ marginTop: "0.5rem" }}>
-              {playlistTracksError}
-            </div>
-          )}
-          {!!selectedPlaylistId && !isLoadingPlaylistTracks && !playlistTracksError && (
-            <div className="help-text" style={{ marginTop: "0.5rem" }}>
-              Playlist added to your route.
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="route-selection">
-        <div className="input-group">
-          <label>Origin</label>
-          <input 
-            type="text" 
-            value={localOrigin} 
-            onChange={(e) => setLocalOrigin(e.target.value)} 
-            placeholder="e.g. New York, NY"
-          />
-        </div>
-        <div className="input-group">
-          <label>Destination</label>
-          <input 
-            type="text" 
-            value={localDestination} 
-            onChange={(e) => setLocalDestination(e.target.value)} 
-            placeholder="e.g. Atlanta, GA"
-          />
-        </div>
-      </div>
-
-      <div className="search-section">
-        <h3>Add Music</h3>
-        <input 
-          type="text" 
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={session ? "Search for a track..." : "Connect Spotify to search"}
-          disabled={!session}
-          className="search-input"
-        />
-        
-        {searchResults.length > 0 && (
-          <div className="search-results">
-            {searchResults.map(track => (
-              <div key={track.id} className="search-item" onClick={() => addTrackToTrip(track)}>
-                <img src={track.albumArt} alt={track.name} />
-                <div className="track-info">
-                  <strong>{track.name}</strong>
-                  <span>{track.artist}</span>
-                </div>
+      <div className="sidebar-content">
+        {session && (
+          <div className="playlist-selection">
+            <h3>Playlist</h3>
+            {isLoadingPlaylists ? (
+              <div className="help-text">Loading your playlists…</div>
+            ) : playlistError ? (
+              <div className="error-text">{playlistError}</div>
+            ) : (
+              <div className="playlist-row">
+                <select
+                  className="playlist-select"
+                  value={selectedPlaylistId ?? ""}
+                  onChange={(e) => setSelectedPlaylistId(e.target.value || null)}
+                  disabled={isLoadingPlaylistTracks}
+                >
+                  <option value="">Select a playlist…</option>
+                  {playlists.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}{p.trackCount != null ? ` (${p.trackCount})` : ""}
+                    </option>
+                  ))}
+                </select>
+                <button className="clear-btn" onClick={() => setSelectedPlaylistId(null)} disabled={!selectedPlaylistId}>
+                  Clear
+                </button>
               </div>
-            ))}
+            )}
+            {isLoadingPlaylistTracks && (
+              <div className="help-text" style={{ marginTop: "0.5rem" }}>
+                Loading tracks into your route…
+              </div>
+            )}
+            {playlistTracksError && (
+              <div className="error-text" style={{ marginTop: "0.5rem" }}>
+                {playlistTracksError}
+              </div>
+            )}
+            {!!selectedPlaylistId && !isLoadingPlaylistTracks && !playlistTracksError && (
+              <div className="help-text" style={{ marginTop: "0.5rem" }}>
+                Playlist added to your route.
+              </div>
+            )}
           </div>
         )}
-      </div>
 
-      <div className="song-list">
-        <h3>Trip Soundtrack</h3>
-        <div onClick={clearTracksFromTrip} className="clear-btn">Clear selected choices</div>
-        {tripSongs.length === 0 && (
-          <div className="empty-state">No songs added yet. Start searching!</div>
-        )}
-        {tripSongs.map((track, index) => (
-          <div key={`${track.id}-${index}`} className="song-item">
-            <img src={track.albumArt} alt={track.name} className="mini-art" />
-            <div className="song-info">
-              <strong>{track.name}</strong>
-              <span>{track.artist}</span>
-            </div>
-            <button className="remove-btn" onClick={() => removeTrackFromTrip(index)}>×</button>
+        <div className="route-selection">
+          <div className="input-group">
+            <label>Origin</label>
+            <input 
+              type="text" 
+              value={localOrigin} 
+              onChange={(e) => setLocalOrigin(e.target.value)} 
+              placeholder="e.g. New York, NY"
+            />
           </div>
-        ))}
+          <div className="input-group">
+            <label>Destination</label>
+            <input 
+              type="text" 
+              value={localDestination} 
+              onChange={(e) => setLocalDestination(e.target.value)} 
+              placeholder="e.g. Atlanta, GA"
+            />
+          </div>
+        </div>
+
+        <div className="search-section">
+          <h3>Add Music</h3>
+          <input 
+            type="text" 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={session ? "Search for a track..." : "Connect Spotify to search"}
+            disabled={!session}
+            className="search-input"
+          />
+          
+          {searchResults.length > 0 && (
+            <div className="search-results">
+              {searchResults.map(track => (
+                <div key={track.id} className="search-item" onClick={() => addTrackToTrip(track)}>
+                  <img src={track.albumArt} alt={track.name} />
+                  <div className="track-info">
+                    <strong>{track.name}</strong>
+                    <span>{track.artist}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="song-list">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0 }}>Trip Soundtrack</h3>
+            {tripSongs.length > 0 && (
+              <div onClick={clearTracksFromTrip} className="clear-all-link">Clear all</div>
+            )}
+          </div>
+          {tripSongs.length === 0 && (
+            <div className="empty-state">No songs added yet. Start searching!</div>
+          )}
+          {tripSongs.map((track, index) => (
+            <div key={`${track.id}-${index}`} className="song-item">
+              <img src={track.albumArt} alt={track.name} className="mini-art" />
+              <div className="song-info">
+                <strong>{track.name}</strong>
+                <span>{track.artist}</span>
+              </div>
+              <button className="remove-btn" onClick={() => removeTrackFromTrip(index)}>×</button>
+            </div>
+          ))}
+        </div>
       </div>
 
       <style jsx>{`
         .sidebar {
           width: 350px;
           height: 100vh;
+          height: 100dvh;
           background: #121212;
           color: white;
           display: flex;
           flex-direction: column;
           padding: 1.5rem;
           box-shadow: 2px 0 10px rgba(0,0,0,0.5);
-          z-index: 2;
+          z-index: 100;
+          transition: transform 0.3s ease-in-out;
+        }
+        .sidebar-content {
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          overflow-y: auto;
+        }
+        .mobile-handle {
+          display: none;
+          padding: 1rem 0;
+          cursor: pointer;
+        }
+        .handle-bar {
+          width: 40px;
+          height: 4px;
+          background: #333;
+          border-radius: 2px;
+          margin: 0 auto;
         }
         .sidebar-header {
           display: flex;
@@ -365,11 +397,19 @@ export default function Sidebar({
           border-radius: 6px;
           cursor: pointer;
           font-weight: 600;
+          font-size: 0.8rem;
         }
         .clear-btn:disabled {
           opacity: 0.5;
           cursor: not-allowed;
         }
+        .clear-all-link {
+          font-size: 0.75rem;
+          color: #b3b3b3;
+          cursor: pointer;
+          text-decoration: underline;
+        }
+        .clear-all-link:hover { color: #1DB954; }
         .route-selection {
           margin-bottom: 1.5rem;
           background: #1e1e1e;
@@ -418,7 +458,7 @@ export default function Sidebar({
           background: #282828;
           border: 1px solid #333;
           border-radius: 0 0 8px 8px;
-          z-index: 10;
+          z-index: 110;
           max-height: 250px;
           overflow-y: auto;
           box-shadow: 0 10px 20px rgba(0,0,0,0.5);
@@ -437,7 +477,7 @@ export default function Sidebar({
         .track-info strong { font-size: 0.85rem; }
         .track-info span { font-size: 0.75rem; color: #b3b3b3; }
         
-        .song-list { flex: 1; overflow-y: auto; }
+        .song-list { flex: 1; }
         .empty-state {
           color: #b3b3b3;
           font-size: 0.8rem;
@@ -456,8 +496,8 @@ export default function Sidebar({
           border-left: 4px solid #1DB954;
         }
         .mini-art { width: 32px; height: 32px; border-radius: 2px; }
-        .song-info { display: flex; flex-direction: column; flex: 1; }
-        .song-info strong { font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+        .song-info { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+        .song-info strong { font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .song-info span { font-size: 0.75rem; color: #b3b3b3; }
         
         .remove-btn {
@@ -469,6 +509,35 @@ export default function Sidebar({
           padding: 0 0.2rem;
         }
         .remove-btn:hover { color: #ff4d4d; }
+
+        @media (max-width: 768px) {
+          .sidebar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            height: 80vh;
+            max-height: 80vh;
+            border-radius: 20px 20px 0 0;
+            padding: 0 1.5rem 1.5rem 1.5rem;
+            transform: translateY(0);
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+          }
+          .sidebar.collapsed {
+            transform: translateY(calc(80vh - 80px));
+          }
+          .mobile-handle {
+            display: block;
+          }
+          .sidebar-header {
+            margin-bottom: 1rem;
+          }
+          h1 { font-size: 1.2rem; }
+          .sidebar-content {
+            padding-top: 1rem;
+          }
+        }
       `}</style>
     </div>
   );

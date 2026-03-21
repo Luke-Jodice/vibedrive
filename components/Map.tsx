@@ -172,6 +172,7 @@ export default function Map({
         zoom={6}
         options={mapOptions}
         onLoad={onMapLoad}
+        onClick={() => setHoveredSong(null)}
       >
         {!response && directionsServiceOptions && (
           <DirectionsService
@@ -214,6 +215,18 @@ export default function Map({
                 }
               }}
               onMouseOut={() => setHoveredSong(null)}
+              onClick={(e) => {
+                if (e.domEvent) {
+                  const x = (e.domEvent as any).clientX || (e.domEvent as any).touches?.[0]?.clientX;
+                  const y = (e.domEvent as any).clientY || (e.domEvent as any).touches?.[0]?.clientY;
+                  if (x && y) {
+                    setHoveredSong({ 
+                      track: sp.track, 
+                      pos: { x, y } 
+                    });
+                  }
+                }
+              }}
               options={{
                 strokeColor: sp.color,
                 strokeOpacity: 1.0,
