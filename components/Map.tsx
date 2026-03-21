@@ -75,8 +75,8 @@ export default function Map({
     setHoveredSong(null);
   }, [routeKey]);
 
-  const directionsCallback = useCallback((res: google.maps.DirectionsResult | null) => {
-    if (res !== null && res.status === 'OK') {
+  const directionsCallback = useCallback((res: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
+    if (res !== null && status === 'OK') {
       setResponse(res);
       const path = res.routes[0].overview_path;
       setFullPath(path);
