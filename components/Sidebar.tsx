@@ -2,6 +2,7 @@
 
 import { signIn, signOut, useSession } from "next-auth/react";
 import React, { useState, useEffect } from "react";
+import FeedbackModal from "./FeedbackModal";
 import { searchTracks } from "@/lib/spotify";
 import { Track } from "@/app/page";
 
@@ -22,13 +23,19 @@ interface SidebarProps {
   setTripSongs: React.Dispatch<React.SetStateAction<Track[]>>;
   selectedPlaylistId: string | null;
   setSelectedPlaylistId: (id: string | null) => void;
+  onOpenFeedback: () => void;
 }
 
-export default function Sidebar({ 
-  origin, setOrigin, destination, setDestination, 
-  tripSongs, setTripSongs,
+export default function Sidebar({
+  origin,
+  setOrigin,
+  destination,
+  setDestination,
+  tripSongs,
+  setTripSongs,
   selectedPlaylistId,
   setSelectedPlaylistId,
+  onOpenFeedback,
 }: SidebarProps) {
   const { data: session } = useSession();
   const [searchQuery, setSearchQuery] = useState("");
@@ -38,15 +45,21 @@ export default function Sidebar({
   const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
   const [playlistError, setPlaylistError] = useState<string | null>(null);
   const [isLoadingPlaylistTracks, setIsLoadingPlaylistTracks] = useState(false);
-  const [playlistTracksError, setPlaylistTracksError] = useState<string | null>(null);
+  const [playlistTracksError, setPlaylistTracksError] = useState<string | null>(
+    null,
+  );
 
   // Local state for debounced inputs
   const [localOrigin, setLocalOrigin] = useState(origin);
   const [localDestination, setLocalDestination] = useState(destination);
 
   // Sync local state if props change externally
-  useEffect(() => { setLocalOrigin(origin); }, [origin]);
-  useEffect(() => { setLocalDestination(destination); }, [destination]);
+  useEffect(() => {
+    setLocalOrigin(origin);
+  }, [origin]);
+  useEffect(() => {
+    setLocalDestination(destination);
+  }, [destination]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -80,7 +93,10 @@ export default function Sidebar({
   }, [searchQuery, session]);
 
   useEffect(() => {
-    const stored = typeof window !== "undefined" ? window.localStorage.getItem("vibedrive:selectedPlaylistId") : null;
+    const stored =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem("vibedrive:selectedPlaylistId")
+        : null;
     if (stored && !selectedPlaylistId) {
       setSelectedPlaylistId(stored);
     }
@@ -89,7 +105,11 @@ export default function Sidebar({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (selectedPlaylistId) window.localStorage.setItem("vibedrive:selectedPlaylistId", selectedPlaylistId);
+    if (selectedPlaylistId)
+      window.localStorage.setItem(
+        "vibedrive:selectedPlaylistId",
+        selectedPlaylistId,
+      );
     else window.localStorage.removeItem("vibedrive:selectedPlaylistId");
   }, [selectedPlaylistId]);
 
@@ -105,10 +125,14 @@ export default function Sidebar({
       setIsLoadingPlaylists(true);
       setPlaylistError(null);
       try {
-        const res = await fetch("/api/spotify/playlists", { cache: "no-store" });
+        const res = await fetch("/api/spotify/playlists", {
+          cache: "no-store",
+        });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          throw new Error(body?.error || `Failed to load playlists (${res.status})`);
+          throw new Error(
+            body?.error || `Failed to load playlists (${res.status})`,
+          );
         }
         const data = await res.json();
         setPlaylists(data.items || []);
@@ -135,13 +159,18 @@ export default function Sidebar({
       setPlaylistTracksError(null);
 
       try {
-        const res = await fetch(`/api/spotify/playlists/${encodeURIComponent(playlistId)}/tracks`, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
+        const res = await fetch(
+          `/api/spotify/playlists/${encodeURIComponent(playlistId)}/tracks`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          throw new Error(body?.error || `Failed to load playlist tracks (${res.status})`);
+          throw new Error(
+            body?.error || `Failed to load playlist tracks (${res.status})`,
+          );
         }
         const data = await res.json();
         if (!cancelled) {
@@ -149,7 +178,9 @@ export default function Sidebar({
         }
       } catch (e: any) {
         if (!cancelled && e?.name !== "AbortError") {
-          setPlaylistTracksError(e?.message || "Failed to load playlist tracks");
+          setPlaylistTracksError(
+            e?.message || "Failed to load playlist tracks",
+          );
         }
       } finally {
         if (!cancelled) {
@@ -183,21 +214,33 @@ export default function Sidebar({
   const [isCollapsed, setIsCollapsed] = useState(true);
 
   return (
-    <div className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
-      <div className="mobile-handle" onClick={() => setIsCollapsed(!isCollapsed)}>
+    <div className={`sidebar ${isCollapsed ? "collapsed" : ""}`}>
+      <div
+        className="mobile-handle"
+        onClick={() => setIsCollapsed(!isCollapsed)}
+      >
         <div className="handle-bar"></div>
       </div>
-      
+
       <div className="sidebar-header">
         <h1>SoundRoute</h1>
+
         {session ? (
-          <button onClick={() => signOut()} className="auth-button">Sign Out</button>
+          <button onClick={() => signOut()} className="auth-button">
+            Sign Out
+          </button>
         ) : (
-          <button onClick={() => signIn('spotify')} className="auth-button spotify">Connect Spotify</button>
+          <button
+            onClick={() => signIn("spotify")}
+            className="auth-button spotify"
+          >
+            Connect Spotify
+          </button>
         )}
       </div>
 
       <div className="sidebar-content">
+   
         {session && (
           <div className="playlist-selection">
             <h3>Playlist</h3>
@@ -210,17 +253,24 @@ export default function Sidebar({
                 <select
                   className="playlist-select"
                   value={selectedPlaylistId ?? ""}
-                  onChange={(e) => setSelectedPlaylistId(e.target.value || null)}
+                  onChange={(e) =>
+                    setSelectedPlaylistId(e.target.value || null)
+                  }
                   disabled={isLoadingPlaylistTracks}
                 >
                   <option value="">Select a playlist…</option>
                   {playlists.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name}{p.trackCount != null ? ` (${p.trackCount})` : ""}
+                      {p.name}
+                      {p.trackCount != null ? ` (${p.trackCount})` : ""}
                     </option>
                   ))}
                 </select>
-                <button className="clear-btn" onClick={() => setSelectedPlaylistId(null)} disabled={!selectedPlaylistId}>
+                <button
+                  className="clear-btn"
+                  onClick={() => setSelectedPlaylistId(null)}
+                  disabled={!selectedPlaylistId}
+                >
                   Clear
                 </button>
               </div>
@@ -235,30 +285,32 @@ export default function Sidebar({
                 {playlistTracksError}
               </div>
             )}
-            {!!selectedPlaylistId && !isLoadingPlaylistTracks && !playlistTracksError && (
-              <div className="help-text" style={{ marginTop: "0.5rem" }}>
-                Playlist added to your route.
-              </div>
-            )}
+            {!!selectedPlaylistId &&
+              !isLoadingPlaylistTracks &&
+              !playlistTracksError && (
+                <div className="help-text" style={{ marginTop: "0.5rem" }}>
+                  Playlist added to your route.
+                </div>
+              )}
           </div>
         )}
 
         <div className="route-selection">
           <div className="input-group">
             <label>Origin</label>
-            <input 
-              type="text" 
-              value={localOrigin} 
-              onChange={(e) => setLocalOrigin(e.target.value)} 
+            <input
+              type="text"
+              value={localOrigin}
+              onChange={(e) => setLocalOrigin(e.target.value)}
               placeholder="e.g. New York, NY"
             />
           </div>
           <div className="input-group">
             <label>Destination</label>
-            <input 
-              type="text" 
-              value={localDestination} 
-              onChange={(e) => setLocalDestination(e.target.value)} 
+            <input
+              type="text"
+              value={localDestination}
+              onChange={(e) => setLocalDestination(e.target.value)}
               placeholder="e.g. Atlanta, GA"
             />
           </div>
@@ -266,19 +318,25 @@ export default function Sidebar({
 
         <div className="search-section">
           <h3>Add Music</h3>
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={session ? "Search for a track..." : "Connect Spotify to search"}
+            placeholder={
+              session ? "Search for a track..." : "Connect Spotify to search"
+            }
             disabled={!session}
             className="search-input"
           />
-          
+
           {searchResults.length > 0 && (
             <div className="search-results">
-              {searchResults.map(track => (
-                <div key={track.id} className="search-item" onClick={() => addTrackToTrip(track)}>
+              {searchResults.map((track) => (
+                <div
+                  key={track.id}
+                  className="search-item"
+                  onClick={() => addTrackToTrip(track)}
+                >
                   <img src={track.albumArt} alt={track.name} />
                   <div className="track-info">
                     <strong>{track.name}</strong>
@@ -291,14 +349,25 @@ export default function Sidebar({
         </div>
 
         <div className="song-list">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "1rem",
+            }}
+          >
             <h3 style={{ margin: 0 }}>Trip Soundtrack</h3>
             {tripSongs.length > 0 && (
-              <div onClick={clearTracksFromTrip} className="clear-all-link">Clear all</div>
+              <div onClick={clearTracksFromTrip} className="clear-all-link">
+                Clear all
+              </div>
             )}
           </div>
           {tripSongs.length === 0 && (
-            <div className="empty-state">No songs added yet. Start searching!</div>
+            <div className="empty-state">
+              No songs added yet. Start searching!
+            </div>
           )}
           {tripSongs.map((track, index) => (
             <div key={`${track.id}-${index}`} className="song-item">
@@ -307,10 +376,19 @@ export default function Sidebar({
                 <strong>{track.name}</strong>
                 <span>{track.artist}</span>
               </div>
-              <button className="remove-btn" onClick={() => removeTrackFromTrip(index)}>×</button>
+              <button
+                className="remove-btn"
+                onClick={() => removeTrackFromTrip(index)}
+              >
+               x
+              </button>
             </div>
           ))}
+      
         </div>
+        <button type="button" className="btn-footer" onClick={onOpenFeedback}>
+          See a Bug?
+        </button>
       </div>
 
       <style jsx>{`
@@ -323,7 +401,7 @@ export default function Sidebar({
           display: flex;
           flex-direction: column;
           padding: 1.5rem;
-          box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+          box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5);
           z-index: 100;
           transition: transform 0.3s ease-in-out;
         }
@@ -351,7 +429,11 @@ export default function Sidebar({
           align-items: center;
           margin-bottom: 2rem;
         }
-        h1 { font-size: 1.5rem; margin: 0; color: #1DB954; }
+        h1 {
+          font-size: 1.5rem;
+          margin: 0;
+          color: #1db954;
+        }
         .auth-button {
           padding: 0.5rem 1rem;
           border-radius: 20px;
@@ -360,7 +442,10 @@ export default function Sidebar({
           font-weight: bold;
           font-size: 0.8rem;
         }
-        .spotify { background: #1DB954; color: black; }
+        .spotify {
+          background: #1db954;
+          color: black;
+        }
         .playlist-selection {
           margin-bottom: 1.5rem;
           background: #1e1e1e;
@@ -409,7 +494,9 @@ export default function Sidebar({
           cursor: pointer;
           text-decoration: underline;
         }
-        .clear-all-link:hover { color: #1DB954; }
+        .clear-all-link:hover {
+          color: #1db954;
+        }
         .route-selection {
           margin-bottom: 1.5rem;
           background: #1e1e1e;
@@ -438,9 +525,12 @@ export default function Sidebar({
         }
         .input-group input:focus {
           outline: none;
-          border-color: #1DB954;
+          border-color: #1db954;
         }
-        .search-section { margin-bottom: 1.5rem; position: relative; }
+        .search-section {
+          margin-bottom: 1.5rem;
+          position: relative;
+        }
         .search-input {
           width: 100%;
           background: #282828;
@@ -461,7 +551,7 @@ export default function Sidebar({
           z-index: 110;
           max-height: 250px;
           overflow-y: auto;
-          box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+          box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
         }
         .search-item {
           display: flex;
@@ -471,13 +561,29 @@ export default function Sidebar({
           gap: 0.75rem;
           border-bottom: 1px solid #333;
         }
-        .search-item:hover { background: #333; }
-        .search-item img { width: 40px; height: 40px; border-radius: 4px; }
-        .track-info { display: flex; flex-direction: column; }
-        .track-info strong { font-size: 0.85rem; }
-        .track-info span { font-size: 0.75rem; color: #b3b3b3; }
-        
-        .song-list { flex: 1; }
+        .search-item:hover {
+          background: #333;
+        }
+        .search-item img {
+          width: 40px;
+          height: 40px;
+          border-radius: 4px;
+        }
+        .track-info {
+          display: flex;
+          flex-direction: column;
+        }
+        .track-info strong {
+          font-size: 0.85rem;
+        }
+        .track-info span {
+          font-size: 0.75rem;
+          color: #b3b3b3;
+        }
+
+        .song-list {
+          flex: 1;
+        }
         .empty-state {
           color: #b3b3b3;
           font-size: 0.8rem;
@@ -493,13 +599,30 @@ export default function Sidebar({
           display: flex;
           align-items: center;
           gap: 0.75rem;
-          border-left: 4px solid #1DB954;
+          border-left: 4px solid #1db954;
         }
-        .mini-art { width: 32px; height: 32px; border-radius: 2px; }
-        .song-info { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
-        .song-info strong { font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .song-info span { font-size: 0.75rem; color: #b3b3b3; }
-        
+        .mini-art {
+          width: 32px;
+          height: 32px;
+          border-radius: 2px;
+        }
+        .song-info {
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          overflow: hidden;
+        }
+        .song-info strong {
+          font-size: 0.85rem;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .song-info span {
+          font-size: 0.75rem;
+          color: #b3b3b3;
+        }
+
         .remove-btn {
           background: none;
           border: none;
@@ -508,7 +631,9 @@ export default function Sidebar({
           cursor: pointer;
           padding: 0 0.2rem;
         }
-        .remove-btn:hover { color: #ff4d4d; }
+        .remove-btn:hover {
+          color: #ff4d4d;
+        }
 
         @media (max-width: 768px) {
           .sidebar {
@@ -522,7 +647,7 @@ export default function Sidebar({
             border-radius: 20px 20px 0 0;
             padding: 0 1.5rem 1.5rem 1.5rem;
             transform: translateY(0);
-            box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+            box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.5);
           }
           .sidebar.collapsed {
             transform: translateY(calc(80vh - 80px));
@@ -533,7 +658,9 @@ export default function Sidebar({
           .sidebar-header {
             margin-bottom: 1rem;
           }
-          h1 { font-size: 1.2rem; }
+          h1 {
+            font-size: 1.2rem;
+          }
           .sidebar-content {
             padding-top: 1rem;
           }
